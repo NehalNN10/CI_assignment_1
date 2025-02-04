@@ -2,6 +2,9 @@ import random
 import os
 from PIL import image
 
+minPoints = 3
+active_polygons_min = 1
+
 # Class for polygons
 class DnaPolygon:
     points = []
@@ -13,9 +16,21 @@ class DnaPolygon:
 
     def get_random(self, width, height):
         # TODO
+        pts = []
+
+        origin = DnaPoint.get_random(width, height)
+        for i in range(minPoints):
+            pt = DnaPoint.get_random(width, height)
+            pts.append(pt)
+
+        brush = DnaBrush.get_random()
+
+        return DnaPolygon(pts, brush)
 
     def clone(self):
-        return DnaPolygon(self.points, self.brush)
+        clonedPoints = points.copy()
+        clonedBrush = brush.clone()
+        return DnaPolygon(clonedPoints, clonedBrush)
 
 class DnaPoint:
     x = 0
@@ -62,30 +77,136 @@ class DnaDrawing:
     is_dirty = False
     polygons = []
 
-    def __init__(self, width, height, polygons):
+    def __init__(self, width, height, polygons, isDirty=True):
         self.width = width
         self.height = height
         self.polygons = polygons
+        self.is_dirty = isDirty
+
+    def point_count(self):
+        count = 0
+        for poly in polygons:
+            count += len(poly.points)
+        return count
+
+    def set_dirty(self):
+        self.is_dirty = True
+
+    def get_random(self, width, height):
+        drawing = DnaDrawing(width, height, [])
+        for i in range(active_polygons_min):
+            drawing.polygons.append(DnaPolygon.get_random(width, height))
+        return drawing
+
+    def clone(self):
+        clonedPolygons = []
+        for poly in polygons:
+            clonedPolygons.append(poly.clone())
+        return DnaDrawing(width, height, clonedPolygons, is_dirty)
 
     def mutate(self):
         # TODO
+        pass
 
-class NewFitnessCalculator:
-    source_bitmap = None
+class Pixel:
+    r = 0
+    g = 0
+    b = 0
+    a = 0
 
+    def __init__(self, r, g, b, a):
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+
+    def get_pixel(self, img, x, y):
+        r, g, b, a = img.getpixel((x, y))
+        return Pixel(r, g, b, a)
+
+class FitnessCalculator:
     def __init__(self, source_bitmap):
-        self.source_bitmap = source_bitmap
+        self.source_bitmap = Image.open(source_bitmap)
+        self.source_pixels = np.array(self.source_bitmap)
 
-    def get_drawing_fitness(self, drawing):
-        # TODO
+    def get_drawing_fitness(self, new_drawing):
+        # Render the new drawing
+        rendered_image = self.render_drawing(new_drawing)
+        rendered_pixels = np.array(rendered_image)
 
+        # Calculate the error
+        error = np.sum((rendered_pixels - self.source_pixels) ** 2)
+        return error
+
+    def render_drawing(self, new_drawing):
+        # Create a blank image with the same size as the source image
+        rendered_image = Image.new('RGBA', self.source_bitmap.size)
+        draw = ImageDraw.Draw(rendered_image)
+
+        # Render the new drawing onto the blank image
+        for shape in new_drawing.shapes:
+            draw.polygon(shape.points, fill=shape.color)
+
+        return rendered_image
+
+# class NewFitnessCalculator:
+#     source_bitmap = None
+#     pixels = []
+
+#     def __init__(self, source_bitmap):
+#         self.source_bitmap = source_bitmap
+#         # Borrowed from https://stackoverflow.com/a/1109747
+#         im = Image.open(source_bitmap)
+#         pixels = list(im.getdata())
+#         width, height = im.size
+#         pixels = [pixels[i * width:(i + 1) * width] for i in xrange(height)]
+
+#     def get_drawing_fitness(self, drawing):
+#         error = 0
+
+
+# Depending on selection scheme, this may change
 class Crossover:
-    def cross(self, dna_drawing1, dna_drawing2):
-        # TODO
+
+    p1 = None
+    p2 = None
+
+    def __init__(self, p1, p2):
+        self.p1 = p1
+        self.p2 = p2
+
+    def cross(self):
+        # Determine random crossover point
+        crossover_point = random.randint(0, min(len(p1.polygons), len(p2.polygons))-1)
+
+        # Create children polygon lists
+        child_one_polygons = self.p1.polygons[:crossover_point] + self.p2.polygons[crossover_point:]
+        child_two_polygons = self.p2.polygons[:crossover_point] + self.p1.polygons[crossover_point:]
+
+        child_one = DnaDrawing(self.p1.width, self.p1.height, child_one_polygons)
+        child_two = DnaDrawing(self.p2.width, self.p2.height, child_two_polygons)
+
+        return child_one, child_two
 
 class Selection:
-    def select(self, drawings):
+
+    def __init__(self, population):
+        self.population = population
+
+    def select_parent(self, drawings):
         # TODO
+        # Change as per selection scheme
+
+        # Roulette based drawing
+        total_fitness = sum([individual.fitness for individual in self.population])
+
+        # Pick a random fitness value and select the corresponding individual
+        selection_value = random.uniform(0, total_fitness)
+        cumulative_fitness = 0
+        for individual in self.population:
+            cumulative_fitness += individual.fitness
+            if cumulative_fitness >= selection_value:
+                return individual
 
 class EvolutionEngine:
     source_bitmap = None
@@ -100,6 +221,10 @@ class EvolutionEngine:
     
     def evolve(self, generations):
         # TODO
+        # Initialize population
+        population = self.initialize_population()
+
+        
 
     def initialize_population(self):
         # TODO
