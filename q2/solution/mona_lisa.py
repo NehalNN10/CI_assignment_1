@@ -1,9 +1,15 @@
 import random
 import os
-from PIL import image
+from PIL import Image, ImageDraw
+import numpy as np
 
 minPoints = 3
 active_polygons_min = 1
+canvas_width = 200
+canvas_height = 200
+mutation_rate = 0.3
+max_polygons = 50
+max_drawings = 50
 
 # Class for polygons
 class DnaPolygon:
@@ -18,14 +24,24 @@ class DnaPolygon:
         # TODO
         pts = []
 
-        origin = DnaPoint.get_random(width, height)
+        origin = DnaPoint(0, 0).get_random(width, height)
         for i in range(minPoints):
-            pt = DnaPoint.get_random(width, height)
+            pt = DnaPoint(0, 0).get_random(width, height)
             pts.append(pt)
 
-        brush = DnaBrush.get_random()
+        brush = DnaBrush(0, 0, 0, 0).get_random()
+        # print(brush)
+        # input("Now?")
 
         return DnaPolygon(pts, brush)
+
+    def get_points(self):
+        arr = []
+        for point in self.points:
+            # print(self.points)
+            # input("Now?")
+            arr.append((point.x, point.y))
+        return arr
 
     def clone(self):
         clonedPoints = points.copy()
@@ -41,8 +57,10 @@ class DnaPoint:
         self.y = y
     
     def get_random(self, width, height):
-        self.x = random.randint(0, width)
-        self.y = random.randint(0, height)
+        point = DnaPoint(0, 0)
+        point.x = random.randint(0, width)
+        point.y = random.randint(0, height)
+        return point
 
     def clone(self):
         return DnaPoint(self.x, self.y)
@@ -60,10 +78,12 @@ class DnaBrush:
         self.a = a
 
     def get_random(self):
-        self.r = random.randint(0, 255)
-        self.g = random.randint(0, 255)
-        self.b = random.randint(0, 255)
-        self.a = random.randint(0, 255)
+        br = DnaBrush(0, 0, 0, 0)
+        br.r = random.randint(0, 255)
+        br.g = random.randint(0, 255)
+        br.b = random.randint(0, 255)
+        br.a = random.randint(0, 255)
+        return br
 
     def clone(self):
         return DnaBrush(self.r, self.g, self.b, self.a)
@@ -77,7 +97,7 @@ class DnaDrawing:
     is_dirty = False
     polygons = []
 
-    def __init__(self, width, height, polygons, isDirty=True):
+    def __init__(self, width, height, polygons=max_polygons, isDirty=True):
         self.width = width
         self.height = height
         self.polygons = polygons
@@ -94,8 +114,8 @@ class DnaDrawing:
 
     def get_random(self, width, height):
         drawing = DnaDrawing(width, height, [])
-        for i in range(active_polygons_min):
-            drawing.polygons.append(DnaPolygon.get_random(width, height))
+        for i in range(max_polygons):
+            drawing.polygons.append(DnaPolygon([], None).get_random(width=width, height=height))
         return drawing
 
     def clone(self):
@@ -104,9 +124,27 @@ class DnaDrawing:
             clonedPolygons.append(poly.clone())
         return DnaDrawing(width, height, clonedPolygons, is_dirty)
 
-    def mutate(self):
-        # TODO
-        pass
+    def mutate(self, mutation_rate=mutation_rate):
+        for polygon in self.polygons:
+            if random.uniform(0, 1) < mutation_rate:
+                # Mutate the polygon
+                colors = (
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                )
+                polygon.brush.r = colors[0]
+                polygon.brush.g = colors[1]
+                polygon.brush.b = colors[2]
+                polygon.brush.a = colors[3]
+            if random.random() < mutation_rate:
+                # Mutate position
+                polygon.points = [
+                    DnaPoint(random.randint(0, canvas_width), random.randint(0, canvas_height))
+                    for _ in polygon.points
+                ]
+
 
 class Pixel:
     r = 0
@@ -126,7 +164,7 @@ class Pixel:
 
 class FitnessCalculator:
     def __init__(self, source_bitmap):
-        self.source_bitmap = Image.open(source_bitmap)
+        self.source_bitmap = Image.open(source_bitmap).convert('RGBA')
         self.source_pixels = np.array(self.source_bitmap)
 
     def get_drawing_fitness(self, new_drawing):
@@ -144,26 +182,10 @@ class FitnessCalculator:
         draw = ImageDraw.Draw(rendered_image)
 
         # Render the new drawing onto the blank image
-        for shape in new_drawing.shapes:
-            draw.polygon(shape.points, fill=shape.color)
+        for shape in new_drawing.polygons:
+            draw.polygon(shape.get_points(), fill=(shape.brush.r, shape.brush.g, shape.brush.b, shape.brush.a))
 
         return rendered_image
-
-# class NewFitnessCalculator:
-#     source_bitmap = None
-#     pixels = []
-
-#     def __init__(self, source_bitmap):
-#         self.source_bitmap = source_bitmap
-#         # Borrowed from https://stackoverflow.com/a/1109747
-#         im = Image.open(source_bitmap)
-#         pixels = list(im.getdata())
-#         width, height = im.size
-#         pixels = [pixels[i * width:(i + 1) * width] for i in xrange(height)]
-
-#     def get_drawing_fitness(self, drawing):
-#         error = 0
-
 
 # Depending on selection scheme, this may change
 class Crossover:
@@ -177,7 +199,7 @@ class Crossover:
 
     def cross(self):
         # Determine random crossover point
-        crossover_point = random.randint(0, min(len(p1.polygons), len(p2.polygons))-1)
+        crossover_point = random.randint(0, min(len(self.p1.polygons), len(self.p2.polygons))-1)
 
         # Create children polygon lists
         child_one_polygons = self.p1.polygons[:crossover_point] + self.p2.polygons[crossover_point:]
@@ -193,20 +215,44 @@ class Selection:
     def __init__(self, population):
         self.population = population
 
-    def select_parent(self, drawings):
+    def select_parent(self, fitness_calculator):
         # TODO
         # Change as per selection scheme
 
         # Roulette based drawing
-        total_fitness = sum([individual.fitness for individual in self.population])
+        total_fitness = sum([fitness_calculator.get_drawing_fitness(individual) for individual in self.population])
 
         # Pick a random fitness value and select the corresponding individual
         selection_value = random.uniform(0, total_fitness)
         cumulative_fitness = 0
         for individual in self.population:
-            cumulative_fitness += individual.fitness
+            cumulative_fitness += fitness_calculator.get_drawing_fitness(individual)
             if cumulative_fitness >= selection_value:
                 return individual
+
+class Mutation:
+    @staticmethod
+    def mutate(dna_drawing, mutation_rate=mutation_rate):
+        for polygon in dna_drawing.polygons:
+            if random.uniform(0, 1) < mutation_rate:
+                # Mutate the polygon
+                colors = (
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                )
+                polygon.brush.r = colors[0]
+                polygon.brush.g = colors[1]
+                polygon.brush.b = colors[2]
+                polygon.brush.a = colors[3]
+            if random.random() < mutation_rate:
+                # Mutate position
+                polygon.points = [
+                    (random.randint(0, canvas_width), random.randint(0, canvas_height))
+                    for _ in polygon.points
+                ]
+
 
 class EvolutionEngine:
     source_bitmap = None
@@ -215,17 +261,20 @@ class EvolutionEngine:
     crossover = None
     selection = None
     generations = 0
+    fitnesses = dict()
 
     def __init__(self, source_bitmap, population_size, generations):
         self.source_bitmap = source_bitmap
         self.population_size = population_size
         self.generations = generations
         self.fitness_calculator = FitnessCalculator(source_bitmap)
-    
+
     def evolve(self, generations):
         # TODO
         # Initialize population
         population = self.initialize_population()
+        # print(population)
+        Id = 0
 
         # Calculate fitness for each individual
         for gen in range(self.generations):
@@ -233,13 +282,15 @@ class EvolutionEngine:
 
             # Evaluate fitness of the population
             for individual in population:
-                individual.fitness = self.fitness_calculator.get_drawing_fitness(individual)
+                self.fitnesses[Id] = self.fitness_calculator.get_drawing_fitness(individual)
+                Id += 1
 
             # Select parents and perform crossover
             next_generation = []
-            for _ in range(self.population_size // 2):  # Pair up parents
-                parent1 = Selection(population).select_parent()
-                parent2 = Selection(population).select_parent()
+            # for _ in range(self.population_size // 2):  # Pair up parents
+            for _ in range(20):  # Pair up parents
+                parent1 = Selection(population).select_parent(self.fitness_calculator)
+                parent2 = Selection(population).select_parent(self.fitness_calculator)
 
                 # Perform crossover
                 crossover = Crossover(parent1, parent2)
@@ -253,16 +304,66 @@ class EvolutionEngine:
                 next_generation.append(child1)
                 next_generation.append(child2)
 
+                print("Child Added!")
+                # input()
+
             # Replace old population with the new generation
-            population = next_generation
+            population += next_generation
+            print(len(population))
+            # input("Then?")
+            population = self.save_population(population)
 
-            # Optionally: Save or check the best individual (elite) in the population
-            best_individual = min(population, key=lambda x: x.fitness)
-            print(f"Best Fitness: {best_individual.fitness}")
+            print(len(population))
+            # input("Now?")
 
+            self.save_images(population, gen)
+            print(f"Generation {gen + 1} complete")
+            # input("Continue?")
+
+            self.fitnesses = {}
+
+            # Save or check the best individual (elite) in the population
+            # best_individual = min(population, key=lambda x: self.fitnesses[x])
+            # print(f"Best Fitness: {best_individual.fitness}")
 
     def initialize_population(self):
         # TODO
+        pop = []
+        for _ in range(self.population_size):
+            pop.append(
+                DnaDrawing(height=canvas_height, width=canvas_width).get_random(
+                    height=canvas_height, width=canvas_width
+                )
+            )
+        return pop
 
-    def save_population(self, drawings, generation):
+    def save_population(self, drawings):
         # TODO
+        # Depends on survivor selection scheme
+        new_gen = []
+        cutoff_fitness = list(reversed(sorted(self.fitnesses.values())))[self.population_size-1]
+        print(cutoff_fitness)
+        # input("CHECK")
+        # print(sorted(self.fitnesses.values()))
+        for i, individual in enumerate(drawings):
+            if self.fitness_calculator.get_drawing_fitness(individual) >= cutoff_fitness:
+                new_gen.append(individual)
+                if len(new_gen) == self.population_size:
+                    break
+        return new_gen
+
+    def save_images(self, drawings, generation):
+        # Create directory if it does not exist
+        if not os.path.exists("imgs"):
+            os.makedirs("imgs")
+        # Save images of the drawings
+        for i, drawing in enumerate(drawings):
+            if self.fitness_calculator.get_drawing_fitness(drawing) == min(self.fitnesses.values()):
+                self.fitness_calculator.render_drawing(drawing).save(f"best_ones/gen_{generation}_drawing_{i}.png")
+            # drawing.render(f"imgs/gen_{generation}_drawing_{i}.png")        
+
+source_bitmap = "ml.bmp"
+population_size = 100
+generations = 100
+ga = EvolutionEngine(source_bitmap, population_size, generations)
+ga.evolve(generations)
