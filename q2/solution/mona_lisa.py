@@ -214,17 +214,52 @@ class EvolutionEngine:
     fitness_calculator = None
     crossover = None
     selection = None
+    generations = 0
 
-    def __init__(self, source_bitmap, population_size):
+    def __init__(self, source_bitmap, population_size, generations):
         self.source_bitmap = source_bitmap
         self.population_size = population_size
+        self.generations = generations
+        self.fitness_calculator = FitnessCalculator(source_bitmap)
     
     def evolve(self, generations):
         # TODO
         # Initialize population
         population = self.initialize_population()
 
-        
+        # Calculate fitness for each individual
+        for gen in range(self.generations):
+            print(f"Generation {gen + 1}")
+
+            # Evaluate fitness of the population
+            for individual in population:
+                individual.fitness = self.fitness_calculator.get_drawing_fitness(individual)
+
+            # Select parents and perform crossover
+            next_generation = []
+            for _ in range(self.population_size // 2):  # Pair up parents
+                parent1 = Selection(population).select_parent()
+                parent2 = Selection(population).select_parent()
+
+                # Perform crossover
+                crossover = Crossover(parent1, parent2)
+                child1, child2 = crossover.cross()
+
+                # Mutate children
+                child1.mutate()
+                child2.mutate()
+
+                # Add children to the next generation
+                next_generation.append(child1)
+                next_generation.append(child2)
+
+            # Replace old population with the new generation
+            population = next_generation
+
+            # Optionally: Save or check the best individual (elite) in the population
+            best_individual = min(population, key=lambda x: x.fitness)
+            print(f"Best Fitness: {best_individual.fitness}")
+
 
     def initialize_population(self):
         # TODO
