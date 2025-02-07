@@ -1,6 +1,7 @@
 from geneticProblem import geneticProblem
 import matplotlib.pyplot as plt
-import colour
+# import colour
+from colour.difference import delta_E_CIE1976
 import copy
 import numpy as np
 from PIL import Image, ImageDraw
@@ -45,7 +46,8 @@ class monaLisa(geneticProblem):
     # mean of Delta E has been used to calculate the fitness, lesser the value, greater the fitness
     def fitnessFunction(self, chromosomes):
         return np.mean(
-            colour.difference.delta_e.delta_E_CIE1976(self.targetImage, chromosomes)
+            # colour.difference.delta_e.delta_E_CIE1976(self.targetImage, chromosomes)
+            delta_E_CIE1976(self.targetImage, chromosomes)
         )
 
     # Basically a potentiol solution - describes in detail in the report
