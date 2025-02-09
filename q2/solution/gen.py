@@ -4,21 +4,34 @@ import random
 from chromosome import Chromosome # use classes defined in chromosome.py
 from pandas import DataFrame as df # storing details in a dataframe and converting into csv
 import math
-import matplotlib.pyplot as plt # *
+import matplotlib.pyplot as plt
+from problem import problem
 
 MIN_POINTS = 3
 MAX_POINTS = 10
 POLYGONS = 50
 
-class gen_alg:
+class gen_alg(problem):
     def __init__(self, filename):
         self.target = Image.open(filename).convert('RGBA')
 
         self.length, self.width = self.target.size
         self.target_array = np.array(self.target) # Using numpy arrays allows for quicker processing
 
+    def chromosome(self):
+        return Chromosome(self.length, self.width)
+
+    def fitness_function(self, chromosome):
+        return get_color_fitness(chromosome, self.target)
+
+    def crossover(self, chromosome1, chromosome2):
+        return cross_over(chromosome1, chromosome2)
+
+    def mutation(self, chromosome):
+        return mutate(chromosome)
+
     def evolve(self, population_size, generations):
-        data = {'generation': [], 'fitness': [], 'cross_over': [], 'pop_gen_used': [], 'image_size': []}
+        data = {'generation': [], 'fitness': [], 'cross_over': [], 'pop_gen_used': [], 'image_size': [], 'average_fitness': []}
 
         population = []
 
